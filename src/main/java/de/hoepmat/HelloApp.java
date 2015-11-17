@@ -1,12 +1,13 @@
 package de.hoepmat;
 
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.support.ClassPathXmlApplicationContext;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
+@SpringBootApplication
+@EnableScheduling
 public class HelloApp {
     public static void main(String[] args) {
-        ApplicationContext context = new ClassPathXmlApplicationContext("spring-config.xml");
-        HelloService helloService = context.getBean(HelloService.class);
-        System.out.println(helloService.sayHello());
+        SpringApplication.run(HelloApp.class,args);
     }
 }
