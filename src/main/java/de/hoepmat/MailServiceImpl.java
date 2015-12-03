@@ -1,6 +1,7 @@
 package de.hoepmat;
 
 import java.io.File;
+import java.util.logging.Logger;
 
 import org.springframework.stereotype.Service;
 
@@ -10,10 +11,13 @@ import org.springframework.stereotype.Service;
 @Service(MailService.BEAN_NAME)
 public class MailServiceImpl implements MailService
 {
+    /** The logger for this class. */
+    private static final Logger LOGGER = Logger.getLogger(MailServiceImpl.class.getName());
+
     @Override
     public void sendMail(String subject, String body)
     {
-
+        LOGGER.info(String.format("send mail subject:[ %s ] - body: [ %s ]", subject, body));
     }
 
     @Override

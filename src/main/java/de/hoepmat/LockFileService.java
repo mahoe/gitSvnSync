@@ -36,55 +36,37 @@ public class LockFileService
 
         if (token != null)
         {
-            String message = String.format("Ein zweiter Prozess ist aktuell noch am arbeiten... [PID: %0]", token);
+            String message = String.format("Ein zweiter Prozess ist aktuell noch am arbeiten... [Token: %s]", token);
             mailService.sendMail("Error on Synchronization", message);
 
             throw new RuntimeException(message);
         }
 
         return writeToken();
-        //            lockPID=$(cat $PATH_TO_LOCK_FILE)
-        //            if [ -z $lockPID ]
-        //            then
-        //            echo "$$" >> $PATH_TO_LOCK_FILE
-        //            else
-        //            logecho "$0 ERROR: this script is running in a different thread!"
-        //            mail2UsersWithErrorNoAndExit $ERR_LOCK_STILL_PRESENT
-        //            fi
-        //
-        //            #echo "007" >> $PATH_TO_LOCK_FILE
-        //
-        //            # only to make sure we have this lock allready... (and no other was in between creating a lock as well!)
-        //            tmp=$(cat $PATH_TO_LOCK_FILE)
-        //            if [ "$tmp" == $$ ]
-        //            then
-        //            logecho "The lock to protect the process was successfully created."
-        //            else
-        //            logecho "$0 ERROR: this script is running in a different thread! (started at the same time...)"
-        //            mail2UsersWithErrorNoAndExit $ERR_STARTED_AT_THE_SAME_TIME
-        //            fi
-        //        }
     }
 
     private String writeToken()
     {
         StringBuilder result = new StringBuilder();
         File lockFile = new File(path_to_lock_file);
-        final String path = lockFile.getAbsolutePath();
+        final String path = lockFile.getParent();
 
         if (!lockFile.exists())
         {
-            if (!new File(path).mkdirs())
+            try
             {
-                throw new RuntimeException(String.format("Kann den Pfad [%0] nicht anlegen!", path));
+                lockFile.createNewFile();
             }
-            lockFile.mkdirs();
+            catch (IOException e)
+            {
+                e.printStackTrace();
+            }
         }
 
         if (!lockFile.canWrite())
         {
             throw new RuntimeException(
-                    String.format("Das File [%0] kann nicht zum Schreiben geoeffnet werden!", path));
+                    String.format("Das File [%s] kann nicht zum Schreiben geoeffnet werden!", path));
         }
 
         try
@@ -92,11 +74,14 @@ public class LockFileService
             FileWriter writer = new FileWriter(lockFile);
             result.append(UUID.randomUUID().toString());
             writer.write(result.toString());
+            writer.flush();
+            writer.close();
         }
         catch (IOException e)
         {
             e.printStackTrace();
         }
+        LOGGER.info("Lock created successful");
         return result.toString();
     }
 
@@ -142,7 +127,7 @@ public class LockFileService
         }
     }
 
-    private void releaseLock()
+    public void releaseLock()
     {
         CharSequence data = "";
         try
@@ -153,6 +138,7 @@ public class LockFileService
         {
             e.printStackTrace();
         }
+        LOGGER.info("Lock removed already");
     }
 
     private File getLockFile(){
