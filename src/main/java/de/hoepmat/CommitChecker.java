@@ -1,7 +1,10 @@
 package de.hoepmat;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +69,9 @@ public class CommitChecker
     @Value("${branch.name.svnSyncBranch}")
     private String svnSyncBranch;
 
+    @Value("${path.to.git.executable}")
+    private String pathToGitExecutable;
+
     @Autowired
     private LockFileService lockFileService;
 
@@ -94,6 +100,15 @@ public class CommitChecker
 
             String syncCommitMessage = createSyncCommitMessage(git);
             LOGGER.info(syncCommitMessage);
+
+            git.checkout().setName(svnSyncBranch).call();
+
+            ArrayList<String> result = runCommand("svn info");
+
+            for (String line : result)
+            {
+                LOGGER.info("X - " + line);
+            }
         }
         catch (GitAPIException e) {
             System.out.println("das ging wohl nicht...");
@@ -102,6 +117,33 @@ public class CommitChecker
         {
             lockFileService.releaseLock();
         }
+    }
+
+    private ArrayList<String> runCommand(String command)
+    {
+        ArrayList<String> result = new ArrayList<String>();
+        final Runtime runtime = Runtime.getRuntime();
+        try
+        {
+            final Process process = runtime.exec(pathToGitExecutable + " " + command,null, new File(syncRepositoryPath.substring(0,syncRepositoryPath.lastIndexOf('.'))));
+            String line = "";
+            process.waitFor();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            while ((line = reader.readLine())!=null){
+                LOGGER.info(line);
+                result.add(line);
+            }
+        }
+        catch (InterruptedException e)
+        {
+            e.printStackTrace();
+        }
+        catch (IOException e)
+        {
+            e.printStackTrace();
+        }
+
+        return result;
     }
 
     private String createSyncCommitMessage(Git git)
