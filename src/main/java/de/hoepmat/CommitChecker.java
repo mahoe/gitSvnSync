@@ -47,14 +47,18 @@ public class CommitChecker
 {
     /** The logger for this class. */
     private static final Logger LOGGER = Logger.getLogger(CommitChecker.class.getName());
+    public static final String FAT_LINE =
+            "##############################################################################";
+    public static final String DOUBLE_LINE =
+            "==============================================================================";
+    public static final String SIMPLE_LINE =
+            "------------------------------------------------------------------------------";
 
     @Value("${path.to.centralRepository}")
     private String centralRepositoryPath;
 
     @Value("${path.to.syncRepository}")
     private String syncRepositoryPath;
-
-
 
     @Value("${branch.name.master}")
     private String master;
@@ -73,7 +77,7 @@ public class CommitChecker
     @Scheduled(fixedDelay = 1000 * 10 )
     public void listNewCommit() throws IOException
     {
-        LOGGER.info("##############################################################################");
+        LOGGER.info(FAT_LINE);
         lockFileService.createLock();
 
         Repository syncRepo = new FileRepositoryBuilder().setGitDir(new File(syncRepositoryPath)).build();
@@ -88,25 +92,8 @@ public class CommitChecker
 
             tryToPullIntoMergeSourceBranch(git, master);
 
-            final Ref tipOfBranchMaster = getTipOfBranch(git, master);
-            final Ref tipOfBranchSvnSync = getTipOfBranch(git, svnSyncBranch);
-
-            Iterable<RevCommit>
-                    commitDiff = getCommitDifference(git, tipOfBranchSvnSync, tipOfBranchMaster);
-
-            final Iterator<RevCommit> iterator = commitDiff.iterator();
-            while (iterator.hasNext()){
-                final RevCommit commit = iterator.next();
-                LOGGER.info(String.format("Commit: %s", commit.getFullMessage()));
-            }
-
-            //            System.out.println(fetchResult.toString());
-//            System.out.println(status.isClean());
-
-            //            AnyObjectId startCommit = git.checkout().setName("master").call().getObjectId();
-            //            AnyObjectId currentHead ;
-            //            log.addRange(startCommit, currentHead);
-
+            String syncCommitMessage = createSyncCommitMessage(git);
+            LOGGER.info(syncCommitMessage);
         }
         catch (GitAPIException e) {
             System.out.println("das ging wohl nicht...");
@@ -117,9 +104,39 @@ public class CommitChecker
         }
     }
 
+    private String createSyncCommitMessage(Git git)
+            throws GitAPIException, IncorrectObjectTypeException, MissingObjectException
+    {
+        LOGGER.info(SIMPLE_LINE);
+        LOGGER.info("createSyncCommitMessage()");
+
+        final Ref tipOfBranchMaster = getTipOfBranch(git, master);
+        final Ref tipOfBranchSvnSync = getTipOfBranch(git, svnSyncBranch);
+
+        Iterable<RevCommit>
+                commitDiff = getCommitDifference(git, tipOfBranchSvnSync, tipOfBranchMaster);
+
+        StringBuilder sb = new StringBuilder();
+        final Iterator<RevCommit> iterator = commitDiff.iterator();
+        while (iterator.hasNext()){
+            final RevCommit commit = iterator.next();
+            final String fullMessage = commit.getFullMessage();
+            LOGGER.info(fullMessage);
+            sb.append(fullMessage).append("\n");
+        }
+        return sb.toString();
+    }
+
     private Ref getTipOfBranch(Git git, String branchName) throws GitAPIException
     {
-        return git.checkout().setName(branchName).call();
+        final List<Ref> refList = git.branchList().setListMode(ListBranchCommand.ListMode.ALL).call();
+        for (Ref ref : refList)
+        {
+            if(ref.getName().endsWith(branchName)){
+                return ref;
+            }
+        }
+        return null;
     }
 
     private Iterable<RevCommit> getCommitDifference(Git git, Ref referenceSVN,
@@ -158,8 +175,29 @@ public class CommitChecker
         final Iterable<RevCommit> commits = log.call();
         for (RevCommit commit : commits)
         {
-            LOGGER.info(String.format("%25s - %s", commit.getId().getName(), commit.getFullMessage()));
+            String shortMsg = cutStringToMax(commit == null ? "" : commit.getShortMessage(),30);
+            LOGGER.info(String.format("%25s - %s", commit.getId().getName(), shortMsg));
         }
+    }
+
+    private String cutStringToMax(String string, int maxCharacters)
+    {
+        int newLength = Math.min(maxCharacters, string.length());
+        StringBuilder sb = new StringBuilder(newLength);
+
+        if (string.isEmpty())
+        {
+            sb.append("no message");
+        } else {
+            if(string.length() > maxCharacters){
+                sb.append(string.substring(0, newLength - 3));
+                sb.append("...");
+            } else {
+                sb.append(string.substring(0, newLength));
+            }
+        }
+
+        return sb.toString();
     }
 
     private void showCurrentState(Git git) throws GitAPIException
@@ -197,9 +235,9 @@ public class CommitChecker
 
     private void loggStatusSet(String title, Set<String> stringSet)
     {
-        LOGGER.info("==============================================================================");
+        LOGGER.info(DOUBLE_LINE);
         LOGGER.info(String.format("%s:",title));
-        LOGGER.info("------------------------------------------------------------------------------");
+        LOGGER.info(SIMPLE_LINE);
         for (String item : stringSet)
         {
             LOGGER.info(String.format("   %s", item));
