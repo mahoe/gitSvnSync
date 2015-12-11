@@ -56,6 +56,7 @@ public class CommitChecker
             "==============================================================================";
     public static final String SIMPLE_LINE =
             "------------------------------------------------------------------------------";
+    public static final String COMMAND_SVN_INFO = "svn info";
 
     @Value("${path.to.centralRepository}")
     private String centralRepositoryPath;
@@ -98,16 +99,30 @@ public class CommitChecker
 
             tryToPullIntoMergeSourceBranch(git, master);
 
-            String syncCommitMessage = createSyncCommitMessage(git);
+            final Ref tipOfBranchMaster = getTipOfBranch(git, master);
+            final Ref tipOfBranchSvnSync = getTipOfBranch(git, svnSyncBranch);
+
+            Iterable<RevCommit>
+                    commitDiff = getCommitDifference(git, tipOfBranchSvnSync, tipOfBranchMaster);
+            String syncCommitMessage = createSyncCommitMessage(commitDiff);
+
             LOGGER.info(syncCommitMessage);
 
             git.checkout().setName(svnSyncBranch).call();
 
-            ArrayList<String> result = runCommand("svn info");
+            ArrayList<String> result = runCommand(COMMAND_SVN_INFO);
+
+
 
             for (String line : result)
             {
                 LOGGER.info("X - " + line);
+            }
+
+            final ArrayList<String> committerEmails = getCommitterEmails(commitDiff);
+            for (String email : committerEmails)
+            {
+                LOGGER.info("Mail: " + email);
             }
         }
         catch (GitAPIException e) {
@@ -117,6 +132,17 @@ public class CommitChecker
         {
             lockFileService.releaseLock();
         }
+    }
+
+    private ArrayList<String> getCommitterEmails(Iterable<RevCommit> commitDiff)
+    {
+        ArrayList<String> emailAddresses = new ArrayList<String>();
+        for (RevCommit commit : commitDiff)
+        {
+            emailAddresses.add(commit.getAuthorIdent().getEmailAddress());
+        }
+
+        return emailAddresses;
     }
 
     private ArrayList<String> runCommand(String command)
@@ -146,20 +172,14 @@ public class CommitChecker
         return result;
     }
 
-    private String createSyncCommitMessage(Git git)
+    private String createSyncCommitMessage(Iterable<RevCommit> commitDifference)
             throws GitAPIException, IncorrectObjectTypeException, MissingObjectException
     {
         LOGGER.info(SIMPLE_LINE);
         LOGGER.info("createSyncCommitMessage()");
 
-        final Ref tipOfBranchMaster = getTipOfBranch(git, master);
-        final Ref tipOfBranchSvnSync = getTipOfBranch(git, svnSyncBranch);
-
-        Iterable<RevCommit>
-                commitDiff = getCommitDifference(git, tipOfBranchSvnSync, tipOfBranchMaster);
-
         StringBuilder sb = new StringBuilder();
-        final Iterator<RevCommit> iterator = commitDiff.iterator();
+        final Iterator<RevCommit> iterator = commitDifference.iterator();
         while (iterator.hasNext()){
             final RevCommit commit = iterator.next();
             final String fullMessage = commit.getFullMessage();
