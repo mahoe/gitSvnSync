@@ -5,12 +5,13 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
+import org.eclipse.jgit.api.CheckoutCommand;
+import org.eclipse.jgit.api.CheckoutResult;
 import org.eclipse.jgit.api.FetchCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.ListBranchCommand;
@@ -28,6 +29,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 /**
  * Created by hoepmat on 11/16/15.
@@ -108,15 +110,11 @@ public class CommitChecker
 
             LOGGER.info(syncCommitMessage);
 
-            git.checkout().setName(svnSyncBranch).call();
-
-            ArrayList<String> result = runCommand(COMMAND_SVN_INFO);
-
-
-
-            for (String line : result)
-            {
-                LOGGER.info("X - " + line);
+            final CheckoutCommand checkoutCommand = git.checkout().setName(svnSyncBranch);
+            final Ref ref1 = checkoutCommand.call();
+            final CheckoutResult checkoutResult = checkoutCommand.getResult();
+            if(ref1!=null || checkoutResult.getStatus().equals(CheckoutResult.Status.OK)){
+                LOGGER.severe("Something went wrong on checkout the svn remote.");
             }
 
             final ArrayList<String> committerEmails = getCommitterEmails(commitDiff);
@@ -124,6 +122,28 @@ public class CommitChecker
             {
                 LOGGER.info("Mail: " + email);
             }
+
+            start2WaySync();
+
+            ArrayList<String> result = runCommand(COMMAND_SVN_INFO);
+            if (checkResultForLine(result, "sdfsdf", false))
+            {
+
+            }
+
+            LOGGER.info(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::");
+            final List<Ref> call = git.branchList().call();
+            for (Ref ref : call)
+            {
+                LOGGER.info(ref.getName());
+            }
+
+            for (String line : result)
+            {
+                LOGGER.info("X - " + line);
+            }
+
+
         }
         catch (GitAPIException e) {
             System.out.println("das ging wohl nicht...");
@@ -132,6 +152,23 @@ public class CommitChecker
         {
             lockFileService.releaseLock();
         }
+    }
+
+    private boolean checkResultForLine(ArrayList<String> strings, String line, boolean strict)
+    {
+        for (String string : strings)
+        {
+            if(string == null ){
+                continue;
+            }
+
+            if ((strict && string.equals(line)) || (!strict && string.contains(line)))
+            {
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     private ArrayList<String> getCommitterEmails(Iterable<RevCommit> commitDiff)
@@ -178,15 +215,21 @@ public class CommitChecker
         LOGGER.info(SIMPLE_LINE);
         LOGGER.info("createSyncCommitMessage()");
 
+        // TODO sync message from file
+        // check for a file or entry in the database
+        // using a template for a synchronize commit message?
+
         StringBuilder sb = new StringBuilder();
-        final Iterator<RevCommit> iterator = commitDifference.iterator();
-        while (iterator.hasNext()){
-            final RevCommit commit = iterator.next();
+        for (RevCommit commit : commitDifference)
+        {
             final String fullMessage = commit.getFullMessage();
             LOGGER.info(fullMessage);
             sb.append(fullMessage).append("\n");
         }
-        return sb.toString();
+
+        final String result = StringUtils.replace(sb.toString(), "FORCE", "F_O_R_C_E");
+
+        return result;
     }
 
     private Ref getTipOfBranch(Git git, String branchName) throws GitAPIException
