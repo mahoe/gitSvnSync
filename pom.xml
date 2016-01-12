@@ -61,10 +61,15 @@
             <artifactId>gwt-dev</artifactId>
             <version>2.7.0</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-email</artifactId>
+            <version>1.4</version>
+        </dependency>
     </dependencies>
 
     <build>
-        <finalName>SpringApp</finalName>
+        <finalName>GitSvnSyncService</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
