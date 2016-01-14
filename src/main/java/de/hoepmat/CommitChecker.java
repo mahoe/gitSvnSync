@@ -1,39 +1,26 @@
 package de.hoepmat;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.logging.Logger;
-
-import org.eclipse.jgit.api.CheckoutCommand;
-import org.eclipse.jgit.api.CheckoutResult;
-import org.eclipse.jgit.api.FetchCommand;
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.ListBranchCommand;
-import org.eclipse.jgit.api.LogCommand;
-import org.eclipse.jgit.api.MergeCommand;
-import org.eclipse.jgit.api.MergeResult;
-import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.api.*;
+import org.eclipse.jgit.api.errors.*;
 import org.eclipse.jgit.errors.IncorrectObjectTypeException;
 import org.eclipse.jgit.errors.MissingObjectException;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.merge.MergeStrategy;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
-import org.eclipse.jgit.transport.PushResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-import static de.hoepmat.Constants.FAT_LINE;
+import java.io.*;
+import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import static de.hoepmat.Constants.*;
 
 /**
  * Created by hoepmat on 11/16/15.
@@ -49,13 +36,24 @@ import static de.hoepmat.Constants.FAT_LINE;
  * SOLUTION:
  * git remote add origin [URL/PATH to remote (i.e. https://github.com/user/repo.git)] *
  * -------------------------------------------------------------------------------------------------------
- *
+ * ERROR:
+ * occured only when software is started fom IDE
+ * java.lang.RuntimeException: [Can't locate Git/SVN.pm in @INC (@INC
+ * REASON:
+ * unknown by now
+ * SOLUTION:
+ * unknown by now
+ * -------------------------------------------------------------------------------------------------------
  */
 @Component
 public class CommitChecker
 {
     /** The logger for this class. */
     private static final Logger LOGGER = Logger.getLogger(CommitChecker.class.getName());
+    public static final String SOMETHING_WENT_WRONG_ON_CHECKOUT_THE_SVN_REMOTE =
+            "Something went wrong on checkout the svn remote.";
+    public static final String UNEXPECTED_ERROR_OCCURED =
+            "An unexpected error occured. Please check the log!";
 
     @Value("${path.to.centralRepository}")
     private String centralRepositoryPath;
@@ -72,6 +70,9 @@ public class CommitChecker
     @Value("${path.to.git.executable}")
     private String pathToGitExecutable;
 
+    @Value("${conflict.solving.strategy}")
+    private String solveConflictStrategy;
+
     @Autowired
     private LockFileService lockFileService;
 
@@ -84,26 +85,23 @@ public class CommitChecker
     @Autowired
     private SyncCommitMessageService commitMessageService;
 
-    public CommitChecker()
-    {
-        LOGGER.info("CommitChecker");
-    }
-
-    @Scheduled(fixedDelay = 1000 * 10)
+    @Scheduled(fixedDelay = 1000 * 60)
     public void listNewCommit() throws IOException
     {
         LOGGER.info(FAT_LINE);
-
-        mailService.sendMail("das ist der zweite Test", "... mit einer Message im Body");
+        LOGGER.info("### Syncronization is starting");
+        LOGGER.info(FAT_LINE);
 
         lockFileService.createLock();
 
         Repository syncRepo = new FileRepositoryBuilder().setGitDir(new File(syncRepositoryPath)).build();
-
         Git git = new Git(syncRepo);
-        final FetchCommand fetch = git.fetch();
+
         try
         {
+            // first we do a fetch
+            git.fetch().call();
+
             loggerService.loggStatus();
 
             tryToPullIntoMergeSourceBranch(git, master);
@@ -111,7 +109,7 @@ public class CommitChecker
             final Ref tipOfBranchMaster = getTipOfBranch(git, master);
             final Ref tipOfBranchSvnSync = getTipOfBranch(git, svnSyncBranch);
 
-            Iterable<RevCommit> commitDiff =
+            LinkedList<RevCommit> commitDiff =
                     getCommitDifference(git, tipOfBranchSvnSync, tipOfBranchMaster);
 
             String syncCommitMessage = commitMessageService.getSyncCommitMessage(commitDiff);
@@ -121,55 +119,46 @@ public class CommitChecker
             final CheckoutResult checkoutResult = checkoutCommand.getResult();
             if (!checkoutResult.getStatus().equals(CheckoutResult.Status.OK))
             {
-                LOGGER.severe("Something went wrong on checkout the svn remote.");
+                LOGGER.severe(SOMETHING_WENT_WRONG_ON_CHECKOUT_THE_SVN_REMOTE);
+                mailService.sendErrorMessage(SOMETHING_WENT_WRONG_ON_CHECKOUT_THE_SVN_REMOTE);
             }
 
-            final ArrayList<String> committerEmails = getCommitterEmails(commitDiff);
-            for (String email : committerEmails)
-            {
-                LOGGER.info("Mail: " + email);
-            }
+            // identify all contributors and collect the emails
+            final HashSet<String> committerEmails = getCommitterEmails(commitDiff);
 
-            start2WaySync(git, tipOfBranchMaster, syncCommitMessage);
+            // start the synchronization
+            final boolean syncWas2Way = start2WaySync(git, tipOfBranchMaster, syncCommitMessage);
 
-            //            ArrayList<String> result = runCommand(COMMAND_GIT_SVN_INFO);
-            //            if (checkResultForLine(result, "sdfsdf", false))
-            //            {
-            //
-            //            }
-            //
-            //            for (String line : result)
-            //            {
-            //                LOGGER.info("X - " + line);
-            //            }
-
+            // logg out the state after synchronization is done
             loggerService.loggStatus();
+
+            if (syncWas2Way) {
+                mailService.sendMail(
+                        null,
+                        committerEmails,
+                        null,
+                        "Synchronization was successful!",
+                        "Commit message is: " + syncCommitMessage, null);
+            }
         }
-        catch (GitAPIException e)
+        catch (Exception e)
         {
-            LOGGER.severe("das ging wohl nicht...");
-            e.printStackTrace();
-            mailService.sendMail("ERROR", "Etwas lief schief, bei der Synchronisation!");
+            LOGGER.log(Level.SEVERE,UNEXPECTED_ERROR_OCCURED,e);
+            mailService.sendErrorMessage(UNEXPECTED_ERROR_OCCURED + " " + e.getMessage());
         }
-        finally
-        {
+//        finally
+//        {
+            // anyway we remove the lock
             lockFileService.releaseLock();
-        }
+            LOGGER.info("Sync run finshed");
+//        }
     }
 
-    private void start2WaySync(Git git, Ref masterBranchHead, String mergeMessage)
-    {
-        // merge svn remote back to master
-        try
-        {
-            git.checkout().setName(svnSyncBranch).call();
-        }
-        catch (GitAPIException e)
-        {
-            e.printStackTrace();
-        }
+    private boolean start2WaySync(Git git, Ref masterBranchHead, String mergeMessage) throws IOException, GitAPIException {
+        boolean syncDone = false;
 
-        LOGGER.info("fetch changes from svn");
+        // fetch changes from SVN
+        LOGGER.info("try to fetch changes from svn");
         ArrayList<String> result = runCommand(Constants.COMMAND_GIT_SVN_FETCH);
         if (result != null)
         {
@@ -178,6 +167,22 @@ public class CommitChecker
                 LOGGER.info("   " + line);
             }
         }
+        LOGGER.info(SIMPLE_LINE);
+
+        // checkout svn remote branch
+        try
+        {
+            git.checkout().setName(svnSyncBranch).call();
+        }
+        catch (GitAPIException e)
+        {
+            final String msg = "Error on checkout branch [" + svnSyncBranch + "]";
+            throw new RuntimeException(msg,e);
+        }
+
+//        LOGGER.info("try to create the TMP branch");
+//        final Ref sync_tmp = git.checkout().setCreateBranch(true).setName("SYNC_TMP").call();
+//        LOGGER.info("Branch angelegt: " + sync_tmp.getName());
 
         // merge git src into svn remote
         boolean okay = doMergeNoFF(git, masterBranchHead, mergeMessage);
@@ -185,87 +190,109 @@ public class CommitChecker
         // svn dcommit
         if (okay)
         {
+            LOGGER.info("try a SVN dcommit");
             ArrayList<String> svnCommitResult = runCommand(Constants.COMMAND_GIT_SVN_DCOMMIT);
+            syncDone = true;
         }
 
-        // merge svn remote back to master
-        try
-        {
-            git.checkout().setName(master).call();
-        }
-        catch (GitAPIException e)
-        {
-            e.printStackTrace();
+        LOGGER.info("Try to merge svn remote back to master");
+        git.checkout().setName(master).call();
+
+        final Ref tipOfBranch = getTipOfBranch(git, svnSyncBranch);
+        okay = doMergeFF(git, tipOfBranch, mergeMessage);
+        if (okay) {
+            LOGGER.info("Try to push to central repository");
+            git.push().call();
+//            git.branchDelete().setBranchNames("SYNC_TMP").call();
+        } else {
+            LOGGER.info("Nothing to merge so nothing to push...");
         }
 
-        try
-        {
-            final Ref tipOfBranch = getTipOfBranch(git, svnSyncBranch);
-            okay = doMergeFF(git, tipOfBranch, mergeMessage);
-            if (okay)
-            {
-                final Iterable<PushResult> pushResults = git.push().call();
+        return syncDone;
+    }
+
+    private boolean doMergeNoFF(Git git, Ref refToMerge, String mergeMessage) throws IOException {
+        return doMerge(git, refToMerge, mergeMessage, true, false);
+    }
+
+    private boolean doMergeFF(Git git, Ref refToMerge, String mergeMessage) throws IOException {
+        return doMerge(git, refToMerge, mergeMessage, false, false);
+    }
+
+    private boolean doMerge(Git git, Ref refToMerge, String mergeMessage, boolean no_ff, boolean solveConflict) throws IOException {
+        loggerService.loggStatus();
+
+        if (no_ff && (mergeMessage == null || mergeMessage.isEmpty())) {
+            LOGGER.info("Commit message is empty for a NO_FF merge. That means, there is nothing to do...");
+            return false;
+        }
+
+        LOGGER.info("Start a merge [" + refToMerge.getObjectId() + " = " + refToMerge.getName() + "]");
+        final MergeCommand mergeCommand = git.merge();
+        mergeCommand.include(refToMerge);
+        if(no_ff){
+            mergeCommand.setMessage(mergeMessage);
+            mergeCommand.setFastForward(MergeCommand.FastForwardMode.NO_FF);
+        } else {
+            mergeCommand.setFastForward(MergeCommand.FastForwardMode.FF);
+        }
+
+        if(solveConflict){
+            if(solveConflictStrategy != null) {
+                final MergeStrategy mergeStrategy = MergeStrategy.get(solveConflictStrategy);
+
+                // default MergeStrategy is THEIRS
+                mergeCommand.setStrategy(mergeStrategy == null ? MergeStrategy.THEIRS : mergeStrategy);
             }
         }
-        catch (GitAPIException e)
-        {
-            e.printStackTrace();
-        }
-    }
-
-    private boolean doMergeNoFF(Git git, Ref refToMerge, String mergeMessage)
-    {
-        return doMerge(git, refToMerge, mergeMessage, true);
-    }
-
-    private boolean doMergeFF(Git git, Ref refToMerge, String mergeMessage)
-    {
-        return doMerge(git, refToMerge, mergeMessage, false);
-    }
-
-    private boolean doMerge(Git git, Ref refToMerge, String mergeMessage, boolean no_ff)
-    {
-        LOGGER.info("Start a merge [" + refToMerge.getObjectId() + " = " + refToMerge.getName() + "]");
-
-        try
-        {
-            loggerService.loggStatus();
-        }
-        catch (IOException e)
-        {
-            e.printStackTrace();
-        }
-
-        final MergeCommand mergeCommand = git.merge();
-
-        mergeCommand.setMessage(mergeMessage).include(refToMerge);
-        mergeCommand.setFastForward(
-                no_ff ? MergeCommand.FastForwardMode.NO_FF : MergeCommand.FastForwardMode.FF);
 
         try
         {
             final MergeResult mergeResult = mergeCommand.call();
             final Map<String, int[][]> conflicts = mergeResult.getConflicts();
 
-            if (conflicts != null)
-            {
-                for (String key : conflicts.keySet())
-                {
-                    LOGGER.info(key + " - " + Arrays.deepToString(conflicts.get(key)));
-                }
+            if(conflicts != null) {
+                // it is the second run in that recursion. Conflicts still present so time to say good bye ;-)
+                // and give the admins some hints
+                if (solveConflict) {
+                    StringBuilder errorLines = new StringBuilder();
+                    errorLines.append("There are conflicts:\n");
+                    for (String key : conflicts.keySet()) {
+                        final String msg = key + " - " + Arrays.deepToString(conflicts.get(key));
+                        errorLines.append(msg).append("\n");
+                        LOGGER.severe("conflicts in file: " + msg);
+                    }
+                    throw new RuntimeException(errorLines.toString());
+                } else {
 
-                return false;
+                    // clean all before we try to start it again
+                    try {
+                        git.rebase().setOperation(RebaseCommand.Operation.ABORT).call();
+                    } catch (NoHeadException e) {
+                    } catch (WrongRepositoryStateException e) {
+                    } catch (CheckoutConflictException e) {
+                    } catch (RefNotFoundException e) {
+                    } catch (GitAPIException e) {
+                    }
+
+                    git.reset().setMode(ResetCommand.ResetType.HARD).setRef("HEAD").call();
+
+                    LOGGER.info("try to solve the conflict...");
+                    doMerge(git, refToMerge, mergeMessage, no_ff, true);
+                    return true;
+                }
             }
 
-            return true;
+            LOGGER.info(DOUBLE_LINE);
+            LOGGER.info("MERGE RESULT");
+            LOGGER.info(mergeResult.toString());
+            LOGGER.info(DOUBLE_LINE);
+            return !mergeResult.getMergeStatus().equals(MergeResult.MergeStatus.ALREADY_UP_TO_DATE);
         }
         catch (GitAPIException e)
         {
-            LOGGER.severe(e.getMessage());
-            e.printStackTrace();
+            throw new RuntimeException("There is a problem with the merge.");
         }
-
-        return false;
     }
 
     private boolean checkResultForLine(ArrayList<String> strings, String line, boolean strict)
@@ -286,12 +313,17 @@ public class CommitChecker
         return false;
     }
 
-    private ArrayList<String> getCommitterEmails(Iterable<RevCommit> commitDiff)
+    private HashSet<String> getCommitterEmails(Iterable<RevCommit> commitDiff)
     {
-        ArrayList<String> emailAddresses = new ArrayList<String>();
+        LOGGER.info(DOUBLE_LINE);
+        LOGGER.info("try to find commiter email addresses.");
+        LOGGER.info(SIMPLE_LINE);
+        HashSet<String> emailAddresses = new HashSet<String>();
         for (RevCommit commit : commitDiff)
         {
-            emailAddresses.add(commit.getAuthorIdent().getEmailAddress());
+            final String emailAddress = commit.getAuthorIdent().getEmailAddress();
+            LOGGER.info(String.format("Found [%s]",emailAddress));
+            emailAddresses.add(emailAddress);
         }
 
         return emailAddresses;
@@ -328,8 +360,7 @@ public class CommitChecker
                 }
                 else
                 {
-                    mailService.sendMail("Error on running shell command", StringUtils.collectionToDelimitedString(result, "\n"));
-                    throw new RuntimeException(result.toString());
+                    throw new RuntimeException("Error on running shell command" + StringUtils.collectionToDelimitedString(result, "\n"));
                 }
             }
 
@@ -337,11 +368,13 @@ public class CommitChecker
         }
         catch (InterruptedException e)
         {
-            e.printStackTrace();
+            mailService.sendErrorMessage(e.getMessage());
+            throw new RuntimeException(e.toString());
         }
         catch (IOException e)
         {
-            e.printStackTrace();
+            mailService.sendErrorMessage(e.getMessage());
+            throw new RuntimeException(e.toString());
         }
 
         return result;
@@ -358,29 +391,6 @@ public class CommitChecker
         }
     }
 
-//    private String createSyncCommitMessage(Iterable<RevCommit> commitDifference)
-//            throws GitAPIException, IncorrectObjectTypeException, MissingObjectException
-//    {
-//        LOGGER.info(SIMPLE_LINE);
-//        LOGGER.info("createSyncCommitMessage()");
-//
-//        // TODO sync message from file
-//        // check for a file or entry in the database
-//        // using a template for a synchronize commit message?
-//
-//        StringBuilder sb = new StringBuilder();
-//        for (RevCommit commit : commitDifference)
-//        {
-//            final String fullMessage = commit.getFullMessage();
-//            LOGGER.info(fullMessage);
-//            sb.append(fullMessage);
-//        }
-//
-//        final String result = StringUtils.replace(sb.toString(), "FORCE", "F_O_R_C_E");
-//
-//        return result;
-//    }
-
     private Ref getTipOfBranch(Git git, String branchName) throws GitAPIException
     {
         final List<Ref> refList = git.branchList().setListMode(ListBranchCommand.ListMode.ALL).call();
@@ -394,12 +404,19 @@ public class CommitChecker
         return null;
     }
 
-    private Iterable<RevCommit> getCommitDifference(Git git, Ref referenceSVN, Ref currentHead)
+    private LinkedList<RevCommit> getCommitDifference(Git git, Ref referenceSVN, Ref currentHead)
             throws IncorrectObjectTypeException, MissingObjectException, GitAPIException
     {
         final LogCommand logCommand =
                 git.log().addRange(referenceSVN.getObjectId(), currentHead.getObjectId());
-        return logCommand.call();
+        final Iterable<RevCommit> commits = logCommand.call();
+
+        LinkedList<RevCommit> result = new LinkedList<RevCommit>();
+        for (RevCommit commit : commits) {
+            result.add(commit);
+        }
+
+        return result;
     }
 
     private void tryToPullIntoMergeSourceBranch(Git git, String branchName) throws GitAPIException
@@ -407,100 +424,4 @@ public class CommitChecker
         git.checkout().setName(branchName).call();
         git.pull().setRebase(true).call();
     }
-
-    //    private void loggAllBranches(Git git) throws GitAPIException
-    //    {
-    //        LOGGER.info("------------------------------------------------------------------------------");
-    //        LOGGER.info("list of available branches:");
-    //        final List<Ref> refList = git.branchList().setListMode(ListBranchCommand.ListMode.ALL).call();
-    //        for (Ref ref : refList)
-    //        {
-    //            LOGGER.info(String.format("%25s - %s", ref.getObjectId().getName(), ref.getName()));
-    //        }
-    //    }
-    //
-    //    private void loggLastCommits(Git git, int numberOfCommits) throws GitAPIException
-    //    {
-    //        LOGGER.info("------------------------------------------------------------------------------");
-    //        LOGGER.info(String.format("Die letzten %d commits sind:", numberOfCommits));
-    //        final LogCommand log = git.log();
-    //        log.setMaxCount(numberOfCommits);
-    //
-    //        final Iterable<RevCommit> commits = log.call();
-    //        for (RevCommit commit : commits)
-    //        {
-    //            String shortMsg = cutStringToMax(commit == null ? "" : commit.getShortMessage(), 30);
-    //            final String name = commit==null || commit.getId() == null ? "no commit or commit id?" : commit.getId().getName();
-    //            LOGGER.info(String.format("%25s - %s", name, shortMsg));
-    //        }
-    //    }
-    //
-    //    private String cutStringToMax(String string, int maxCharacters)
-    //    {
-    //        int newLength = Math.min(maxCharacters, string.length());
-    //        StringBuilder sb = new StringBuilder(newLength);
-    //
-    //        if (string.isEmpty())
-    //        {
-    //            sb.append("no message");
-    //        }
-    //        else
-    //        {
-    //            if (string.length() > maxCharacters)
-    //            {
-    //                sb.append(string.substring(0, newLength - 3));
-    //                sb.append("...");
-    //            }
-    //            else
-    //            {
-    //                sb.append(string.substring(0, newLength));
-    //            }
-    //        }
-    //
-    //        return sb.toString();
-    //    }
-    //
-    //    private void showCurrentState(Git git) throws GitAPIException
-    //    {
-    //        LOGGER.info("Aktueller Status des Repositories:");
-    //        final Status status = git.status().call();
-    //
-    //        if (status.isClean())
-    //        {
-    //            LOGGER.info("Das Repository ist sauber. Es gibt nichts zu tun.");
-    //            return;
-    //        }
-    //
-    //        final Set<String> added = status.getAdded();
-    //        final Set<String> changed = status.getChanged();
-    //        final Set<String> conflicting = status.getConflicting();
-    //        final Set<String> ignoredNotInIndex = status.getIgnoredNotInIndex();
-    //        final Set<String> missing = status.getMissing();
-    //        final Set<String> modified = status.getModified(); // was ist der Unterschied zu changed???
-    //        final Map<String, IndexDiff.StageState> conflictingStageState = status.getConflictingStageState();
-    //        final Set<String> removed = status.getRemoved();
-    //        final Set<String> uncommittedChanges = status.getUncommittedChanges();
-    //        final Set<String> untracked = status.getUntracked();
-    //
-    //        loggStatusSet("Added", added);
-    //        loggStatusSet("Changed", changed);
-    //        loggStatusSet("Conflicting", conflicting);
-    //        loggStatusSet("Ignored not in Index", ignoredNotInIndex);
-    //        loggStatusSet("Missing", missing);
-    //        loggStatusSet("Modified", modified);
-    //        loggStatusSet("Removed", removed);
-    //        loggStatusSet("Uncommitted changes", uncommittedChanges);
-    //        loggStatusSet("Untracked", untracked);
-    //    }
-    //
-    //    private void loggStatusSet(String title, Set<String> stringSet)
-    //    {
-    //        LOGGER.info(DOUBLE_LINE);
-    //        LOGGER.info(String.format("%s:", title));
-    //        LOGGER.info(SIMPLE_LINE);
-    //        for (String item : stringSet)
-    //        {
-    //            LOGGER.info(String.format("   %s", item));
-    //        }
-    //    }
 }

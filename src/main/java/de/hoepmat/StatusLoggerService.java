@@ -1,12 +1,5 @@
 package de.hoepmat;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.logging.Logger;
-
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.ListBranchCommand;
 import org.eclipse.jgit.api.LogCommand;
@@ -19,6 +12,16 @@ import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Logger;
+
+import static de.hoepmat.Constants.DOUBLE_LINE;
+import static de.hoepmat.Constants.SIMPLE_LINE;
 
 /**
  * Created by hoepmat on 1/12/16.
@@ -39,19 +42,22 @@ public class StatusLoggerService
 
         try
         {
+            LOGGER.info(DOUBLE_LINE);
             showCurrentState(git);
+            LOGGER.info(SIMPLE_LINE);
             loggAllBranches(git);
+            LOGGER.info(SIMPLE_LINE);
             loggLastCommits(git, 10);
+            LOGGER.info(DOUBLE_LINE);
         }
         catch (GitAPIException e)
         {
-            e.printStackTrace();
+            throw new RuntimeException("Something went wrong on collecting the current status", e);
         }
     }
 
     private void loggAllBranches(Git git) throws GitAPIException
     {
-        LOGGER.info("------------------------------------------------------------------------------");
         LOGGER.info("list of available branches:");
         final List<Ref> refList = git.branchList().setListMode(ListBranchCommand.ListMode.ALL).call();
         for (Ref ref : refList)
@@ -62,7 +68,6 @@ public class StatusLoggerService
 
     private void loggLastCommits(Git git, int numberOfCommits) throws GitAPIException
     {
-        LOGGER.info("------------------------------------------------------------------------------");
         LOGGER.info(String.format("Die letzten %d commits sind:", numberOfCommits));
         final LogCommand log = git.log();
         log.setMaxCount(numberOfCommits);

@@ -6,8 +6,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
-public class HelloApp {
+public class GitSvnSyncServiceApp
+{
     public static void main(String[] args) {
-        SpringApplication.run(HelloApp.class,args);
+        SpringApplication.run(GitSvnSyncServiceApp.class,args);
     }
 }
