@@ -85,9 +85,12 @@ public class CommitChecker
     @Autowired
     private SyncCommitMessageService commitMessageService;
 
+    private ArrayList<String> conflictingFiles = new ArrayList<String>();
+
     @Scheduled(fixedDelay = 1000 * 60)
     public void listNewCommit() throws IOException
     {
+        conflictingFiles.clear();
         LOGGER.info(FAT_LINE);
         LOGGER.info("### Syncronization is starting");
         LOGGER.info(FAT_LINE);
@@ -132,13 +135,27 @@ public class CommitChecker
             // logg out the state after synchronization is done
             loggerService.loggStatus();
 
+            StringBuilder message = new StringBuilder("Commit message is: ")
+                    .append(syncCommitMessage)
+                    .append("\n");
+            StringBuilder subject = new StringBuilder("Synchronization was successful!");
+
+            if(conflictingFiles.size()>0){
+                subject.append("(With conflicting files!)");
+                message.append("Conflicting files:\n");
+            }
+            for (String conflictingFile : conflictingFiles) {
+                message.append(conflictingFile).append("\n");
+            }
+
             if (syncWas2Way) {
                 mailService.sendMail(
                         null,
                         committerEmails,
                         null,
-                        "Synchronization was successful!",
-                        "Commit message is: " + syncCommitMessage, null);
+                        subject.toString(),
+                        message.toString(),
+                        null);
             }
         }
         catch (Exception e)
@@ -264,6 +281,11 @@ public class CommitChecker
                     }
                     throw new RuntimeException(errorLines.toString());
                 } else {
+
+                    for (String key : conflicts.keySet()) {
+                        final String msg = key + " - " + Arrays.deepToString(conflicts.get(key));
+                        conflictingFiles.add(msg);
+                    }
 
                     // clean all before we try to start it again
                     try {
