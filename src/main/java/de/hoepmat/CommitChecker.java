@@ -1,5 +1,6 @@
 package de.hoepmat;
 
+import de.hoepmat.web.StateHolder;
 import org.eclipse.jgit.api.*;
 import org.eclipse.jgit.api.errors.*;
 import org.eclipse.jgit.errors.IncorrectObjectTypeException;
@@ -24,10 +25,10 @@ import static de.hoepmat.Constants.*;
 
 /**
  * Created by hoepmat on 11/16/15.
- *
- *
+ * <p/>
+ * <p/>
  * git svn clone --username hans:myPassword --trunk=/der/pfad/zu/tunk -rSVN_REVISION_NUMBER:HEAD https://URL_ZUM_REPOSITORY gitrepo_sync
- *
+ * <p/>
  * -------------------------------------------------------------------------------------------------------
  * ERROR:
  * InvalidConfigurationException: No value for key remote.origin.url found in configuration
@@ -46,15 +47,15 @@ import static de.hoepmat.Constants.*;
  * -------------------------------------------------------------------------------------------------------
  */
 @Component
-public class CommitChecker
-{
-    /** The logger for this class. */
-    private static final Logger LOGGER = Logger.getLogger(CommitChecker.class.getName());
+public class CommitChecker {
     public static final String SOMETHING_WENT_WRONG_ON_CHECKOUT_THE_SVN_REMOTE =
             "Something went wrong on checkout the svn remote.";
     public static final String UNEXPECTED_ERROR_OCCURED =
             "An unexpected error occured. Please check the log!";
-
+    /**
+     * The logger for this class.
+     */
+    private static final Logger LOGGER = Logger.getLogger(CommitChecker.class.getName());
     @Value("${path.to.centralRepository}")
     private String centralRepositoryPath;
 
@@ -85,26 +86,27 @@ public class CommitChecker
     @Autowired
     private SyncCommitMessageService commitMessageService;
 
+    @Autowired
+    private StateHolder stateHolder;
+
     private ArrayList<String> conflictingFiles = new ArrayList<String>();
 
-    @Scheduled(fixedDelay = 1000 * 60)
-    public void listNewCommit() throws IOException
-    {
-        conflictingFiles.clear();
-        LOGGER.info(FAT_LINE);
-        LOGGER.info("### Syncronization is starting");
-        LOGGER.info(FAT_LINE);
+    @Scheduled(fixedDelayString = "${synchronization.scheduled.delay}")
+    public void syncWithSvn() throws IOException {
+        try {
+            conflictingFiles.clear();
+            LOGGER.info(FAT_LINE);
+            LOGGER.info("### Syncronization is starting");
+            LOGGER.info(FAT_LINE);
+            stateHolder.getState().setMessage("OKAY - starting");
 
-        lockFileService.createLock();
+            lockFileService.createLock();
 
-        Repository syncRepo = new FileRepositoryBuilder().setGitDir(new File(syncRepositoryPath)).build();
-        Git git = new Git(syncRepo);
+            Repository syncRepo = new FileRepositoryBuilder().setGitDir(new File(syncRepositoryPath)).build();
+            Git git = new Git(syncRepo);
 
-        try
-        {
             // first we do a fetch
             git.fetch().call();
-
             loggerService.loggStatus();
 
             tryToPullIntoMergeSourceBranch(git, master);
@@ -120,8 +122,7 @@ public class CommitChecker
             final CheckoutCommand checkoutCommand = git.checkout().setName(svnSyncBranch);
             checkoutCommand.call();
             final CheckoutResult checkoutResult = checkoutCommand.getResult();
-            if (!checkoutResult.getStatus().equals(CheckoutResult.Status.OK))
-            {
+            if (!checkoutResult.getStatus().equals(CheckoutResult.Status.OK)) {
                 LOGGER.severe(SOMETHING_WENT_WRONG_ON_CHECKOUT_THE_SVN_REMOTE);
                 mailService.sendErrorMessage(SOMETHING_WENT_WRONG_ON_CHECKOUT_THE_SVN_REMOTE);
             }
@@ -140,7 +141,7 @@ public class CommitChecker
                     .append("\n");
             StringBuilder subject = new StringBuilder("Synchronization was successful!");
 
-            if(conflictingFiles.size()>0){
+            if (conflictingFiles.size() > 0) {
                 subject.append("(With conflicting files!)");
                 message.append("Conflicting files:\n");
             }
@@ -156,19 +157,19 @@ public class CommitChecker
                         subject.toString(),
                         message.toString(),
                         null);
+                stateHolder.getState().setMessage("OKAY - successfull two way sync. Finished at: " + new Date());
+            } else {
+                stateHolder.getState().setMessage("OKAY - successfull one way sync. Finished at: " + new Date());
             }
-        }
-        catch (Exception e)
-        {
-            LOGGER.log(Level.SEVERE,UNEXPECTED_ERROR_OCCURED,e);
-            mailService.sendErrorMessage(UNEXPECTED_ERROR_OCCURED + " " + e.getMessage());
-        }
-//        finally
-//        {
-            // anyway we remove the lock
+
             lockFileService.releaseLock();
             LOGGER.info("Sync run finshed");
-//        }
+
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, UNEXPECTED_ERROR_OCCURED, e);
+            mailService.sendErrorMessage(UNEXPECTED_ERROR_OCCURED + " " + e.getMessage());
+            stateHolder.getState().setMessage(UNEXPECTED_ERROR_OCCURED + " " + e.getMessage());
+        }
     }
 
     private boolean start2WaySync(Git git, Ref masterBranchHead, String mergeMessage) throws IOException, GitAPIException {
@@ -177,24 +178,19 @@ public class CommitChecker
         // fetch changes from SVN
         LOGGER.info("try to fetch changes from svn");
         ArrayList<String> result = runCommand(Constants.COMMAND_GIT_SVN_FETCH);
-        if (result != null)
-        {
-            for (String line : result)
-            {
+        if (result != null) {
+            for (String line : result) {
                 LOGGER.info("   " + line);
             }
         }
         LOGGER.info(SIMPLE_LINE);
 
         // checkout svn remote branch
-        try
-        {
+        try {
             git.checkout().setName(svnSyncBranch).call();
-        }
-        catch (GitAPIException e)
-        {
+        } catch (GitAPIException e) {
             final String msg = "Error on checkout branch [" + svnSyncBranch + "]";
-            throw new RuntimeException(msg,e);
+            throw new RuntimeException(msg, e);
         }
 
 //        LOGGER.info("try to create the TMP branch");
@@ -205,8 +201,7 @@ public class CommitChecker
         boolean okay = doMergeNoFF(git, masterBranchHead, mergeMessage);
 
         // svn dcommit
-        if (okay)
-        {
+        if (okay) {
             LOGGER.info("try a SVN dcommit");
             ArrayList<String> svnCommitResult = runCommand(Constants.COMMAND_GIT_SVN_DCOMMIT);
             syncDone = true;
@@ -247,15 +242,15 @@ public class CommitChecker
         LOGGER.info("Start a merge [" + refToMerge.getObjectId() + " = " + refToMerge.getName() + "]");
         final MergeCommand mergeCommand = git.merge();
         mergeCommand.include(refToMerge);
-        if(no_ff){
+        if (no_ff) {
             mergeCommand.setMessage(mergeMessage);
             mergeCommand.setFastForward(MergeCommand.FastForwardMode.NO_FF);
         } else {
             mergeCommand.setFastForward(MergeCommand.FastForwardMode.FF);
         }
 
-        if(solveConflict){
-            if(solveConflictStrategy != null) {
+        if (solveConflict) {
+            if (solveConflictStrategy != null) {
                 final MergeStrategy mergeStrategy = MergeStrategy.get(solveConflictStrategy);
 
                 // default MergeStrategy is THEIRS
@@ -263,12 +258,11 @@ public class CommitChecker
             }
         }
 
-        try
-        {
+        try {
             final MergeResult mergeResult = mergeCommand.call();
             final Map<String, int[][]> conflicts = mergeResult.getConflicts();
 
-            if(conflicts != null) {
+            if (conflicts != null) {
                 // it is the second run in that recursion. Conflicts still present so time to say good bye ;-)
                 // and give the admins some hints
                 if (solveConflict) {
@@ -310,24 +304,18 @@ public class CommitChecker
             LOGGER.info(mergeResult.toString());
             LOGGER.info(DOUBLE_LINE);
             return !mergeResult.getMergeStatus().equals(MergeResult.MergeStatus.ALREADY_UP_TO_DATE);
-        }
-        catch (GitAPIException e)
-        {
+        } catch (GitAPIException e) {
             throw new RuntimeException("There is a problem with the merge.");
         }
     }
 
-    private boolean checkResultForLine(ArrayList<String> strings, String line, boolean strict)
-    {
-        for (String string : strings)
-        {
-            if (string == null)
-            {
+    private boolean checkResultForLine(ArrayList<String> strings, String line, boolean strict) {
+        for (String string : strings) {
+            if (string == null) {
                 continue;
             }
 
-            if ((strict && string.equals(line)) || (!strict && string.contains(line)))
-            {
+            if ((strict && string.equals(line)) || (!strict && string.contains(line))) {
                 return true;
             }
         }
@@ -335,28 +323,24 @@ public class CommitChecker
         return false;
     }
 
-    private HashSet<String> getCommitterEmails(Iterable<RevCommit> commitDiff)
-    {
+    private HashSet<String> getCommitterEmails(Iterable<RevCommit> commitDiff) {
         LOGGER.info(DOUBLE_LINE);
         LOGGER.info("try to find commiter email addresses.");
         LOGGER.info(SIMPLE_LINE);
         HashSet<String> emailAddresses = new HashSet<String>();
-        for (RevCommit commit : commitDiff)
-        {
+        for (RevCommit commit : commitDiff) {
             final String emailAddress = commit.getAuthorIdent().getEmailAddress();
-            LOGGER.info(String.format("Found [%s]",emailAddress));
+            LOGGER.info(String.format("Found [%s]", emailAddress));
             emailAddresses.add(emailAddress);
         }
 
         return emailAddresses;
     }
 
-    private ArrayList<String> runCommand(String command)
-    {
+    private ArrayList<String> runCommand(String command) {
         ArrayList<String> result = new ArrayList<String>();
         final Runtime runtime = Runtime.getRuntime();
-        try
-        {
+        try {
             final String commandLine = pathToGitExecutable + " " + command;
             final File workDir =
                     new File(syncRepositoryPath.substring(0, syncRepositoryPath.lastIndexOf('.')));
@@ -374,27 +358,19 @@ public class CommitChecker
 
             getOutputLines(result, process.getErrorStream());
 
-            if (result.size() != 0)
-            {
-                if ((process.exitValue() == 0))
-                {
+            if (result.size() != 0) {
+                if ((process.exitValue() == 0)) {
                     LOGGER.warning(result.toString());
-                }
-                else
-                {
+                } else {
                     throw new RuntimeException("Error on running shell command" + StringUtils.collectionToDelimitedString(result, "\n"));
                 }
             }
 
             getOutputLines(result, process.getInputStream());
-        }
-        catch (InterruptedException e)
-        {
+        } catch (InterruptedException e) {
             mailService.sendErrorMessage(e.getMessage());
             throw new RuntimeException(e.toString());
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             mailService.sendErrorMessage(e.getMessage());
             throw new RuntimeException(e.toString());
         }
@@ -402,24 +378,19 @@ public class CommitChecker
         return result;
     }
 
-    private void getOutputLines(ArrayList<String> result, InputStream inputStream) throws IOException
-    {
+    private void getOutputLines(ArrayList<String> result, InputStream inputStream) throws IOException {
         String line;
         BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-        while ((line = reader.readLine()) != null)
-        {
+        while ((line = reader.readLine()) != null) {
             LOGGER.info(line);
             result.add(line);
         }
     }
 
-    private Ref getTipOfBranch(Git git, String branchName) throws GitAPIException
-    {
+    private Ref getTipOfBranch(Git git, String branchName) throws GitAPIException {
         final List<Ref> refList = git.branchList().setListMode(ListBranchCommand.ListMode.ALL).call();
-        for (Ref ref : refList)
-        {
-            if (ref.getName().endsWith(branchName))
-            {
+        for (Ref ref : refList) {
+            if (ref.getName().endsWith(branchName)) {
                 return ref;
             }
         }
@@ -427,8 +398,7 @@ public class CommitChecker
     }
 
     private LinkedList<RevCommit> getCommitDifference(Git git, Ref referenceSVN, Ref currentHead)
-            throws IncorrectObjectTypeException, MissingObjectException, GitAPIException
-    {
+            throws IncorrectObjectTypeException, MissingObjectException, GitAPIException {
         final LogCommand logCommand =
                 git.log().addRange(referenceSVN.getObjectId(), currentHead.getObjectId());
         final Iterable<RevCommit> commits = logCommand.call();
@@ -441,8 +411,7 @@ public class CommitChecker
         return result;
     }
 
-    private void tryToPullIntoMergeSourceBranch(Git git, String branchName) throws GitAPIException
-    {
+    private void tryToPullIntoMergeSourceBranch(Git git, String branchName) throws GitAPIException {
         git.checkout().setName(branchName).call();
         git.pull().setRebase(true).call();
     }

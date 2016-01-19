@@ -1,17 +1,17 @@
 package de.hoepmat;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.List;
-import java.util.UUID;
-
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * Created by hoepmat on 11/17/15.
@@ -127,17 +127,9 @@ public class LockFileService
         }
     }
 
-    public void releaseLock()
-    {
+    public void releaseLock() throws IOException {
         CharSequence data = "";
-        try
-        {
-            FileUtils.write(getLockFile(), data, false);
-        }
-        catch (IOException e)
-        {
-            e.printStackTrace();
-        }
+        FileUtils.write(getLockFile(), data, false);
         LOGGER.info("Lock removed already");
     }
 
