@@ -14,9 +14,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -89,6 +89,9 @@ public class CommitChecker {
     @Autowired
     private StateHolder stateHolder;
 
+    @Autowired
+    private CommandShell commandShell;
+
     private ArrayList<String> conflictingFiles = new ArrayList<String>();
 
     @Scheduled(fixedDelayString = "${synchronization.scheduled.delay}")
@@ -117,7 +120,7 @@ public class CommitChecker {
             LinkedList<RevCommit> commitDiff =
                     getCommitDifference(git, tipOfBranchSvnSync, tipOfBranchMaster);
 
-            String syncCommitMessage = commitMessageService.getSyncCommitMessage(commitDiff);
+            String syncCommitMessage = commitMessageService.getSyncCommitMessage(commitDiff, tipOfBranchSvnSync);
 
             final CheckoutCommand checkoutCommand = git.checkout().setName(svnSyncBranch);
             checkoutCommand.call();
@@ -177,7 +180,7 @@ public class CommitChecker {
 
         // fetch changes from SVN
         LOGGER.info("try to fetch changes from svn");
-        ArrayList<String> result = runCommand(Constants.COMMAND_GIT_SVN_FETCH);
+        ArrayList<String> result = commandShell.runCommand(Constants.COMMAND_GIT_SVN_FETCH);
         if (result != null) {
             for (String line : result) {
                 LOGGER.info("   " + line);
@@ -203,7 +206,7 @@ public class CommitChecker {
         // svn dcommit
         if (okay) {
             LOGGER.info("try a SVN dcommit");
-            ArrayList<String> svnCommitResult = runCommand(Constants.COMMAND_GIT_SVN_DCOMMIT);
+            ArrayList<String> svnCommitResult = commandShell.runCommand(Constants.COMMAND_GIT_SVN_DCOMMIT);
             syncDone = true;
         }
 
@@ -335,56 +338,6 @@ public class CommitChecker {
         }
 
         return emailAddresses;
-    }
-
-    private ArrayList<String> runCommand(String command) {
-        ArrayList<String> result = new ArrayList<String>();
-        final Runtime runtime = Runtime.getRuntime();
-        try {
-            final String commandLine = pathToGitExecutable + " " + command;
-            final File workDir =
-                    new File(syncRepositoryPath.substring(0, syncRepositoryPath.lastIndexOf('.')));
-
-            final Process process = runtime.exec(commandLine, null, workDir);
-            process.waitFor();
-            StringBuilder sb = new StringBuilder("Result of command '");
-            sb.append(commandLine)
-                    .append("' in workdir [")
-                    .append(workDir.getAbsolutePath())
-                    .append("] was [")
-                    .append(process.exitValue())
-                    .append("]");
-            LOGGER.info(sb.toString());
-
-            getOutputLines(result, process.getErrorStream());
-
-            if (result.size() != 0) {
-                if ((process.exitValue() == 0)) {
-                    LOGGER.warning(result.toString());
-                } else {
-                    throw new RuntimeException("Error on running shell command" + StringUtils.collectionToDelimitedString(result, "\n"));
-                }
-            }
-
-            getOutputLines(result, process.getInputStream());
-        } catch (InterruptedException e) {
-            mailService.sendErrorMessage(e.getMessage());
-            throw new RuntimeException(e.toString());
-        } catch (IOException e) {
-            mailService.sendErrorMessage(e.getMessage());
-            throw new RuntimeException(e.toString());
-        }
-
-        return result;
-    }
-
-    private void getOutputLines(ArrayList<String> result, InputStream inputStream) throws IOException {
-        String line;
-        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-        while ((line = reader.readLine()) != null) {
-            LOGGER.info(line);
-            result.add(line);
-        }
     }
 
     private Ref getTipOfBranch(Git git, String branchName) throws GitAPIException {
