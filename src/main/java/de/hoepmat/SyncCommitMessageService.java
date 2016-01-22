@@ -37,6 +37,11 @@ public class SyncCommitMessageService
     {
         LOGGER.info("createSyncCommitMessage()");
 
+        if(!commitDifference.iterator().hasNext()){
+            LOGGER.info("Nichts zu committen.");
+            return "";
+        }
+
         // Is Commit message filled? If yes we use that ...
         final String message = commitMessageHolder.getMessage();
         if(message !=null && !message.isEmpty()){
@@ -48,7 +53,8 @@ public class SyncCommitMessageService
         // using a template for a synchronize commit message?
 
         if(usePullrequestmessage){
-            final ArrayList<String> strings = commandShell.runCommand("request-pull " + tipOfBranchSvnSync + " origin");
+            final String name = tipOfBranchSvnSync.getName();
+            final ArrayList<String> strings = commandShell.runCommand("request-pull " + name + " origin");
 
             StringBuilder sb = new StringBuilder();
             for (String string : strings) {
