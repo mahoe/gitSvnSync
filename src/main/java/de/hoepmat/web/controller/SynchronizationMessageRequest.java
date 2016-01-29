@@ -11,7 +11,8 @@ import java.util.logging.Logger;
 /**
  * Created by hoepmat on 1/21/16.
  */
-@RestController
+@RestController()
+@RequestMapping("/json")
 public class SynchronizationMessageRequest {
 
     /**

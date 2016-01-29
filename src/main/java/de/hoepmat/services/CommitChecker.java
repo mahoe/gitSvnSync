@@ -1,5 +1,7 @@
-package de.hoepmat;
+package de.hoepmat.services;
 
+import de.hoepmat.common.Constants;
+import de.hoepmat.util.CommandShell;
 import de.hoepmat.web.StateHolder;
 import org.eclipse.jgit.api.*;
 import org.eclipse.jgit.api.errors.*;
@@ -21,7 +23,7 @@ import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static de.hoepmat.Constants.*;
+import static de.hoepmat.common.Constants.*;
 
 /**
  * Created by hoepmat on 11/16/15.
@@ -74,6 +76,9 @@ public class CommitChecker {
     @Value("${conflict.solving.strategy}")
     private String solveConflictStrategy;
 
+    @Value("${server.port}")
+    private String serverPort;
+
     @Autowired
     private LockFileService lockFileService;
 
@@ -97,6 +102,11 @@ public class CommitChecker {
     @Scheduled(fixedDelayString = "${synchronization.scheduled.delay}")
     public void syncWithSvn() throws IOException {
         try {
+            if(stateHolder.getState().isSuspend()){
+                LOGGER.info("... I am sleeping ;-) - reactivate me with http://hostname:" + serverPort + "/start");
+                return;
+            }
+
             conflictingFiles.clear();
             LOGGER.info(FAT_LINE);
             LOGGER.info("### Syncronization is starting");
@@ -310,20 +320,6 @@ public class CommitChecker {
         } catch (GitAPIException e) {
             throw new RuntimeException("There is a problem with the merge.");
         }
-    }
-
-    private boolean checkResultForLine(ArrayList<String> strings, String line, boolean strict) {
-        for (String string : strings) {
-            if (string == null) {
-                continue;
-            }
-
-            if ((strict && string.equals(line)) || (!strict && string.contains(line))) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private HashSet<String> getCommitterEmails(Iterable<RevCommit> commitDiff) {

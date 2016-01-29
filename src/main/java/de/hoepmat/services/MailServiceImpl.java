@@ -1,4 +1,4 @@
-package de.hoepmat;
+package de.hoepmat.services;
 
 import org.apache.commons.mail.Email;
 import org.apache.commons.mail.EmailException;

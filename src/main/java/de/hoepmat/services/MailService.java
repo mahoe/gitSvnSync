@@ -1,4 +1,4 @@
-package de.hoepmat;
+package de.hoepmat.services;
 
 import java.io.File;
 import java.util.Set;

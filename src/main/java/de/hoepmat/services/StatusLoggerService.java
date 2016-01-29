@@ -1,5 +1,6 @@
-package de.hoepmat;
+package de.hoepmat.services;
 
+import de.hoepmat.common.Constants;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.ListBranchCommand;
 import org.eclipse.jgit.api.LogCommand;
@@ -20,8 +21,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
-import static de.hoepmat.Constants.DOUBLE_LINE;
-import static de.hoepmat.Constants.SIMPLE_LINE;
+import static de.hoepmat.common.Constants.DOUBLE_LINE;
+import static de.hoepmat.common.Constants.SIMPLE_LINE;
 
 /**
  * Created by hoepmat on 1/12/16.

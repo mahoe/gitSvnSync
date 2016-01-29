@@ -1,5 +1,7 @@
-package de.hoepmat;
+package de.hoepmat.services;
 
+import de.hoepmat.common.Constants;
+import de.hoepmat.util.CommandShell;
 import de.hoepmat.web.CommitMessageHolder;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.errors.IncorrectObjectTypeException;

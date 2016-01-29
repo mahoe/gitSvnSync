@@ -1,4 +1,4 @@
-package de.hoepmat;
+package de.hoepmat.services;
 
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.io.FileUtils;

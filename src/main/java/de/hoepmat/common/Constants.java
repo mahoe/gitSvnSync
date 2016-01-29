@@ -1,4 +1,4 @@
-package de.hoepmat;
+package de.hoepmat.common;
 
 /**
  * Created by hoepmat on 1/12/16.

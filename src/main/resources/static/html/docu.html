@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Documentation about the synchronization service</title>
+    <style>
+        body {
+            font-family: "Times New Roman", Times, serif;
+            color: #025808;
+        }
+
+        caption {
+            font-size: 1.5em;
+            text-align: left;
+            spacing: 15px;
+            padding: 5px;
+        }
+
+        .frame {
+            border: 1px solid #7DCD82;
+        }
+
+        th {
+            background-color: #4CAE52;
+            color: white;
+            font-size: 1.1em
+            backgound-color: green;
+        }
+
+        td {
+            font-size: 1em;
+        / / color: #A9E2AD;
+        }
+
+        th, td {
+            padding: 5px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+
+<table class="frame" align="center">
+    <tr>
+        <td>
+            <table width="600px">
+                <caption>Available Service URLs</caption>
+                <tr>
+                    <th>Url</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td>
+                        <a href="/json/" target="blank">/json/</a></td>
+                    <td>Displays the current state.</td>
+                </tr>
+                <tr>
+                    <td>
+                        <a href="/json/stop" target="blank">/json/stop</a></td>
+                    <td>Stops synchronization.</td>
+                </tr>
+                <tr>
+                    <td>
+                        <a href="/json/start" target="blank">/json/start</a></td>
+                    <td>Starts synchronization after stopping it.</td>
+                </tr>
+                <tr>
+                    <td>
+                        <a href="/json/releaseLock" target="blank">/json/releaseLock</a></td>
+                    <td>If a lock is created by the software and the problem is solved.</td>
+                </tr>
+            </table>
+        </td>
+</table>
+
+</body>
+</html>

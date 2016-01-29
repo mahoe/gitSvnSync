@@ -9,7 +9,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Created by hoepmat on 1/19/16.
  */
-@RestController
+@RestController()
+@RequestMapping("/json")
 public class StatusRequests {
 
     @Autowired
