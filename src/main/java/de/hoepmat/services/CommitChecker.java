@@ -116,7 +116,9 @@ public class CommitChecker {
             lockFileService.createLock();
 
             Repository syncRepo = new FileRepositoryBuilder().setGitDir(new File(syncRepositoryPath)).build();
+            syncRepo.getConfig().load();
             Git git = new Git(syncRepo);
+            loggerService.loggStatus();
 
             // first we do a fetch
             git.fetch().call();
@@ -227,7 +229,7 @@ public class CommitChecker {
         okay = doMergeFF(git, tipOfBranch, mergeMessage);
         if (okay) {
             LOGGER.info("Try to push to central repository");
-            git.push().call();
+            git.push().setRemote("origin").call();
 //            git.branchDelete().setBranchNames("SYNC_TMP").call();
         } else {
             LOGGER.info("Nothing to merge so nothing to push...");
@@ -362,6 +364,6 @@ public class CommitChecker {
 
     private void tryToPullIntoMergeSourceBranch(Git git, String branchName) throws GitAPIException {
         git.checkout().setName(branchName).call();
-        git.pull().setRebase(true).call();
+        git.pull().setRemote("origin").setRebase(true).call();
     }
 }

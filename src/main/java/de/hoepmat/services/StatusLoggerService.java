@@ -38,12 +38,13 @@ public class StatusLoggerService
 
     public void loggStatus() throws IOException
     {
-        Repository syncRepo = new FileRepositoryBuilder().setGitDir(new File(syncRepositoryPath)).build();
+        Repository syncRepo = new FileRepositoryBuilder().setGitDir(new File(syncRepositoryPath)).findGitDir().build();
         Git git = new Git(syncRepo);
 
         try
         {
             LOGGER.info(DOUBLE_LINE);
+            LOGGER.info("Details of reopsitory: " + git.getRepository().getDirectory().getAbsolutePath());
             showCurrentState(git);
             LOGGER.info(SIMPLE_LINE);
             loggAllBranches(git);
