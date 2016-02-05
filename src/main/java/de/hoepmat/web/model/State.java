@@ -11,6 +11,7 @@ public class State {
     private boolean suspend = false;
 
     private String reactivateAt;
+    private long timeSpend;
 
     public String getMessage() {
         return message;
@@ -39,5 +40,13 @@ public class State {
 
     public void setReactivateAt(String reactivateAt) {
         this.reactivateAt = reactivateAt;
+    }
+
+    public void setTimeSpend(long timeSpend) {
+        this.timeSpend = timeSpend;
+    }
+
+    public long getTimeSpend() {
+        return timeSpend;
     }
 }

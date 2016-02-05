@@ -3,6 +3,7 @@ package de.hoepmat.services;
 import de.hoepmat.common.Constants;
 import de.hoepmat.util.CommandShell;
 import de.hoepmat.web.StateHolder;
+import de.hoepmat.web.model.State;
 import org.eclipse.jgit.api.*;
 import org.eclipse.jgit.api.errors.*;
 import org.eclipse.jgit.errors.IncorrectObjectTypeException;
@@ -102,11 +103,11 @@ public class CommitChecker {
     @Scheduled(fixedDelayString = "${synchronization.scheduled.delay}")
     public void syncWithSvn() throws IOException {
         try {
-            if(stateHolder.getState().isSuspend()){
+            if (stateHolder.getState().isSuspend()) {
                 LOGGER.info("... I am sleeping ;-) - reactivate me with http://hostname:" + serverPort + "/start");
                 return;
             }
-
+            long startTime = System.currentTimeMillis();
             conflictingFiles.clear();
             LOGGER.info(FAT_LINE);
             LOGGER.info("### Syncronization is starting");
@@ -164,6 +165,7 @@ public class CommitChecker {
                 message.append(conflictingFile).append("\n");
             }
 
+            final State state = stateHolder.getState();
             if (syncWas2Way) {
                 mailService.sendMail(
                         null,
@@ -172,10 +174,11 @@ public class CommitChecker {
                         subject.toString(),
                         message.toString(),
                         null);
-                stateHolder.getState().setMessage("OKAY - successfull two way sync. Finished at: " + new Date());
+                state.setMessage("OKAY - successfull two way sync. Finished at: " + new Date());
             } else {
-                stateHolder.getState().setMessage("OKAY - successfull one way sync. Finished at: " + new Date());
+                state.setMessage("OKAY - successfull one way sync. Finished at: " + new Date());
             }
+            state.setTimeSpend(System.currentTimeMillis() - startTime);
 
             lockFileService.releaseLock();
             LOGGER.info("Sync run finshed");
