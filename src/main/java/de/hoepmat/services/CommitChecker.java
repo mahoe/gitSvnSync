@@ -102,6 +102,7 @@ public class CommitChecker {
 
     @Scheduled(fixedDelayString = "${synchronization.scheduled.delay}")
     public void syncWithSvn() throws IOException {
+        Repository syncRepo = null;
         try {
             if (stateHolder.getState().isSuspend()) {
                 LOGGER.info("... I am sleeping ;-) - reactivate me with http://hostname:" + serverPort + "/start");
@@ -116,7 +117,7 @@ public class CommitChecker {
 
             lockFileService.createLock();
 
-            Repository syncRepo = new FileRepositoryBuilder().setGitDir(new File(syncRepositoryPath)).build();
+            syncRepo = new FileRepositoryBuilder().setGitDir(new File(syncRepositoryPath)).build();
             syncRepo.getConfig().load();
             Git git = new Git(syncRepo);
             loggerService.loggStatus();
@@ -187,6 +188,11 @@ public class CommitChecker {
             LOGGER.log(Level.SEVERE, UNEXPECTED_ERROR_OCCURED, e);
             mailService.sendErrorMessage(UNEXPECTED_ERROR_OCCURED + " " + e.getMessage());
             stateHolder.getState().setMessage(UNEXPECTED_ERROR_OCCURED + " " + e.getMessage());
+        }
+        finally {
+            if (syncRepo != null) {
+                syncRepo.close();
+            }
         }
     }
 

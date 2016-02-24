@@ -56,6 +56,9 @@ public class StatusLoggerService
         {
             throw new RuntimeException("Something went wrong on collecting the current status", e);
         }
+        finally {
+            syncRepo.close();
+        }
     }
 
     private void loggAllBranches(Git git) throws GitAPIException
