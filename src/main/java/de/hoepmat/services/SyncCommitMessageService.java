@@ -82,4 +82,11 @@ public class SyncCommitMessageService
         LOGGER.info("commit message will be: [" + result + "]");
         return result;
     }
+
+    /**
+     * Sets the commit message to an empty string. Next time the service will compile the message out of the commit difference.
+     */
+    public void resetCommitMessage(){
+        commitMessageHolder.setMessage("");
+    }
 }

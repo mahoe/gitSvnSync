@@ -175,7 +175,9 @@ public class CommitChecker {
                         subject.toString(),
                         message.toString(),
                         null);
+
                 state.setMessage("OKAY - successfull two way sync. Finished at: " + new Date());
+                commitMessageService.resetCommitMessage();
             } else {
                 state.setMessage("OKAY - successfull one way sync. Finished at: " + new Date());
             }
