@@ -9,6 +9,6 @@ public interface Constants
     String DOUBLE_LINE ="==============================================================================";
     String SIMPLE_LINE ="------------------------------------------------------------------------------";
     String COMMAND_GIT_SVN_INFO = "svn info";
-    String COMMAND_GIT_SVN_FETCH = "svn fetch";
+    String COMMAND_GIT_SVN_FETCH = "svn fetch --all";
     String COMMAND_GIT_SVN_DCOMMIT = "svn dcommit";
 }
