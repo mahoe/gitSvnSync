@@ -40,6 +40,13 @@
             background-color: #f2f2f2;
         }
     </style>
+    <script language="JavaScript">
+        function sendMessage(message){
+            var loc = window.location;
+            newUrl = loc.origin + "/json/send/" + encodeURI( message);
+            loc.assign(newUrl);
+        }
+    </script>
 </head>
 <body>
 
@@ -71,6 +78,17 @@
                     <td>
                         <a href="/json/releaseLock" target="blank">/json/releaseLock</a></td>
                     <td>If a lock is created by the software and the problem is solved.</td>
+                </tr>
+                <tr>
+                    <td valign="top">
+                        <span>/json/send/{next&nbsp;commit&nbsp;message}</span>
+                    </td>
+                    <td>
+                        <form>
+                            <textarea id="txtCommitMessage" cols="40" rows="4"></textarea><br>
+                            <button onclick="sendMessage(document.getElementById('txtCommitMessage').value);" >Senden</button>
+                        </form>
+                    </td>
                 </tr>
             </table>
         </td>
