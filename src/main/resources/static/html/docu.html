@@ -44,7 +44,7 @@
         function sendMessage(message){
             var loc = window.location;
             newUrl = loc.origin + "/json/send/" + encodeURI( message);
-            loc.assign(newUrl);
+            open(newUrl);
         }
     </script>
 </head>
