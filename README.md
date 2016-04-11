@@ -3,8 +3,8 @@ Of course there are options to move in one big step from SVN to GIT! ... and of 
 thats the way you should go with. But in a real world scenarios it is in most cases a bit different!
 
 There are some developers with no or less experience. Okay - it is easy to convince them. But if you do the big bang
-move thae feel not very comfortable and you need them to convince the management as well! That is the obstacle you
-should focus on! To take that you need some time the support from all the team members...
+move they feel not very comfortable and you need them to convince the management as well! That is the obstacle you
+should focus on! To take that you need the support from all the team members...
 
 ## The biggest advantages
 There are some advantages of using a step wise approach:
