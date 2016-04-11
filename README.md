@@ -67,7 +67,9 @@ is explained there.
 
 ### start the application and have a look into the logs
 You can start the application with:
+
     java -Xmx256m -jar GitSvnSyncService.jar --security.user.name=admin --security.user.password=passwd123
+    
 After the application starts you will see a log file sync.log. Have a look into that file to see if all the things are
 working as expected. If you face some problems write me a mail! I will try to respond as soon as possible.
 
