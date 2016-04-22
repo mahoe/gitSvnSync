@@ -80,6 +80,9 @@ public class CommitChecker {
     @Value("${server.port}")
     private String serverPort;
 
+    @Value("${dryRunForDevelopReason:}")
+    private String dryRunForDevelopReason;
+
     @Autowired
     private LockFileService lockFileService;
 
@@ -102,6 +105,9 @@ public class CommitChecker {
 
     @Scheduled(fixedDelayString = "${synchronization.scheduled.delay}")
     public void syncWithSvn() throws IOException {
+        if(!(dryRunForDevelopReason==null || dryRunForDevelopReason.isEmpty())){
+            return;
+        }
         Repository syncRepo = null;
         try {
             if (stateHolder.getState().isSuspend()) {
