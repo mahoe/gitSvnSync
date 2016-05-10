@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/mahoe/gitSvnSync.svg?branch=master)](https://travis-ci.org/mahoe/gitSvnSync)
+
 # gitSvnSync - SVN <===> GIT Synchronization
 Of course there are options to move in one big step from SVN to GIT! ... and of course - for a team that is fit in GIT
 thats the way you should go with. But in a real world scenarios it is in most cases a bit different!
