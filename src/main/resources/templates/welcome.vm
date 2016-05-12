@@ -1,3 +1,5 @@
+#* @vtlvariable name="application_version" type="java.lang.String" *#
+#* @vtlvariable name="application_state" type="java.lang.String" *#
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -89,6 +91,10 @@
                             <button onclick="sendMessage(document.getElementById('txtCommitMessage').value);" >Senden</button>
                         </form>
                     </td>
+                </tr>
+                <tr>
+                    <td valign="top">Aktueller Status:</td>
+                    <td>$application_state</td>
                 </tr>
                 <tr>
                     <td>Version:</td>
