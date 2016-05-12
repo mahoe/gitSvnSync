@@ -51,9 +51,9 @@ import static de.hoepmat.common.Constants.*;
  */
 @Component
 public class CommitChecker {
-    public static final String SOMETHING_WENT_WRONG_ON_CHECKOUT_THE_SVN_REMOTE =
+    private static final String SOMETHING_WENT_WRONG_ON_CHECKOUT_THE_SVN_REMOTE =
             "Something went wrong on checkout the svn remote.";
-    public static final String UNEXPECTED_ERROR_OCCURED =
+    private static final String UNEXPECTED_ERROR_OCCURED =
             "An unexpected error occured. Please check the log!";
     /**
      * The logger for this class.
@@ -80,8 +80,8 @@ public class CommitChecker {
     @Value("${server.port}")
     private String serverPort;
 
-    @Value("${dryRunForDevelopReason:}")
-    private String dryRunForDevelopReason;
+    @Value("${dryRunForDevelopReason:false}")
+    private boolean dryRunForDevelopReason;
 
     @Autowired
     private LockFileService lockFileService;
@@ -105,7 +105,7 @@ public class CommitChecker {
 
     @Scheduled(fixedDelayString = "${synchronization.scheduled.delay}")
     public void syncWithSvn() throws IOException {
-        if(!(dryRunForDevelopReason==null || dryRunForDevelopReason.isEmpty())){
+        if(dryRunForDevelopReason){
             return;
         }
         Repository syncRepo = null;
