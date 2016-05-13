@@ -1,3 +1,6 @@
+#* @vtlvariable name="application_title" type="java.lang.String" *#
+#* @vtlvariable name="attention_hint" type="java.lang.String" *#
+#* @vtlvariable name="attention_development" type="java.lang.String" *#
 #* @vtlvariable name="application_version" type="java.lang.String" *#
 #* @vtlvariable name="application_state" type="java.lang.String" *#
 <!DOCTYPE html>
@@ -27,6 +30,24 @@
             font-size: 1.1em;
         }
 
+        .attention {
+            font-size: 0.8em;
+            font-weight: bold;
+            color: red;
+        }
+        .attention_hint{
+            font-size: 0.6em;
+            color: red;
+        }
+
+        .app_title {
+            font-size: 1.6em;
+        }
+
+        .version {
+            font-size: 0.6em;
+        }
+
         td {
             font-size: 1em;
         / / color: #A9E2AD;
@@ -43,9 +64,9 @@
         }
     </style>
     <script language="JavaScript">
-        function sendMessage(message){
+        function sendMessage(message) {
             var loc = window.location;
-            newUrl = loc.origin + "/json/send/" + encodeURI( message);
+            newUrl = loc.origin + "/json/send/" + encodeURI(message);
             open(newUrl);
         }
     </script>
@@ -55,8 +76,14 @@
 <table class="frame" align="center">
     <tr>
         <td>
-            <table width="600px">
-                <caption>Available Service URLs</caption>
+            <table width="750px">
+                <caption>
+                    <span class="attention">$attention_development</span><br>
+                    <span class="attention_hint">$attention_hint</span><br>
+                    <span class="app_title">$application_title<br></span>
+                    Available Service URLs<br>
+                    <span class="version">Version: $application_version</span>
+                </caption>
                 <tr>
                     <th>Url</th>
                     <th>Description</th>
@@ -88,17 +115,14 @@
                     <td>
                         <form>
                             <textarea id="txtCommitMessage" cols="40" rows="4"></textarea><br>
-                            <button onclick="sendMessage(document.getElementById('txtCommitMessage').value);" >Senden</button>
+                            <button onclick="sendMessage(document.getElementById('txtCommitMessage').value);">Senden
+                            </button>
                         </form>
                     </td>
                 </tr>
                 <tr>
                     <td valign="top">Aktueller Status:</td>
                     <td>$application_state</td>
-                </tr>
-                <tr>
-                    <td>Version:</td>
-                    <td>$application_version</td>
                 </tr>
             </table>
         </td>
