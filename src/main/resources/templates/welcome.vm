@@ -78,8 +78,10 @@
         <td>
             <table width="750px">
                 <caption>
+                    #if($attention_development)
                     <span class="attention">$attention_development</span><br>
                     <span class="attention_hint">$attention_hint</span><br>
+                    #end
                     <span class="app_title">$application_title<br></span>
                     Available Service URLs<br>
                     <span class="version">Version: $application_version</span>
