@@ -20,6 +20,7 @@ public class CommandShell {
      * The logger for this class.
      */
     private static final Logger LOGGER = Logger.getLogger(CommandShell.class.getName());
+    public static final String ERROR_CODE_PREFIX = "command returned error: ";
 
     @Autowired
     private MailService mailService;
@@ -55,15 +56,15 @@ public class CommandShell {
                 if ((process.exitValue() == 0)) {
                     LOGGER.warning(result.toString());
                 } else {
-                    throw new RuntimeException("Error on running shell command" + StringUtils.collectionToDelimitedString(result, "\n"));
+                    sb = new StringBuilder();
+                    sb.append("Error on running shell command\n");
+                    sb.append(StringUtils.collectionToDelimitedString(result, "\n"));
+                    throw new RuntimeException( sb.toString());
                 }
             }
 
             getOutputLines(result, process.getInputStream());
-        } catch (InterruptedException e) {
-            mailService.sendErrorMessage(e.getMessage());
-            throw new RuntimeException(e.toString());
-        } catch (IOException e) {
+        } catch (InterruptedException | IOException e) {
             mailService.sendErrorMessage(e.getMessage());
             throw new RuntimeException(e.toString());
         }

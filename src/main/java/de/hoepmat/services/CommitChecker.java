@@ -5,7 +5,7 @@ import de.hoepmat.util.CommandShell;
 import de.hoepmat.web.StateHolder;
 import de.hoepmat.web.model.State;
 import org.eclipse.jgit.api.*;
-import org.eclipse.jgit.api.errors.*;
+import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.errors.IncorrectObjectTypeException;
 import org.eclipse.jgit.errors.MissingObjectException;
 import org.eclipse.jgit.lib.Ref;
@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -25,6 +26,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static de.hoepmat.common.Constants.*;
+import static de.hoepmat.util.CommandShell.ERROR_CODE_PREFIX;
 
 /**
  * Created by hoepmat on 11/16/15.
@@ -109,8 +111,9 @@ public class CommitChecker {
             return;
         }
         Repository syncRepo = null;
+        final State state = stateHolder.getState();
         try {
-            if (stateHolder.getState().isSuspend()) {
+            if (state.isSuspend()) {
                 LOGGER.info("... I am sleeping ;-) - reactivate me with http://hostname:" + serverPort + "/start");
                 return;
             }
@@ -119,7 +122,7 @@ public class CommitChecker {
             LOGGER.info(FAT_LINE);
             LOGGER.info("### Syncronization is starting");
             LOGGER.info(FAT_LINE);
-            stateHolder.getState().setMessage("OKAY - starting");
+            state.setMessage("OKAY - ("  + new Date() + ") - starting");
 
             lockFileService.createLock();
 
@@ -172,7 +175,6 @@ public class CommitChecker {
                 message.append(conflictingFile).append("\n");
             }
 
-            final State state = stateHolder.getState();
             if (syncWas2Way) {
                 mailService.sendMail(
                         null,
@@ -182,10 +184,10 @@ public class CommitChecker {
                         message.toString(),
                         null);
 
-                state.setMessage("OKAY - successfull two way sync. Finished at: " + new Date());
+                state.setMessage("OKAY - ("  + new Date() + ") - successfull two way sync. finished");
                 commitMessageService.resetCommitMessage();
             } else {
-                state.setMessage("OKAY - successfull one way sync. Finished at: " + new Date());
+                state.setMessage("OKAY - ("  + new Date() + ") - successfull one way sync. finished");
             }
             state.setTimeSpend(System.currentTimeMillis() - startTime);
 
@@ -195,7 +197,7 @@ public class CommitChecker {
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, UNEXPECTED_ERROR_OCCURED, e);
             mailService.sendErrorMessage(UNEXPECTED_ERROR_OCCURED + " " + e.getMessage());
-            stateHolder.getState().setMessage(UNEXPECTED_ERROR_OCCURED + " " + e.getMessage());
+            state.setMessage("ERROR - ("  + new Date() + ") - " + UNEXPECTED_ERROR_OCCURED + " " + e.getMessage());
         }
         finally {
             if (syncRepo != null) {
@@ -235,8 +237,23 @@ public class CommitChecker {
         // svn dcommit
         if (okay) {
             LOGGER.info("try a SVN dcommit");
-            ArrayList<String> svnCommitResult = commandShell.runCommand(Constants.COMMAND_GIT_SVN_DCOMMIT);
-            syncDone = true;
+
+            ArrayList<String> svnCommitResult = null;
+            try {
+                svnCommitResult = commandShell.runCommand(Constants.COMMAND_GIT_SVN_DCOMMIT);
+                syncDone = true;
+            } catch (RuntimeException e) {
+                final int errorNumber = getErrorNumber(e.getMessage());
+                if(errorNumber!=0) {
+                    LOGGER.warning("ERROR ON SVN DCOMMIT: " + errorNumber);
+
+                    if (errorNumber == 128) {
+                        // SVN commit message hook :-(
+                        cleanupRepository(git);
+                    }
+                }
+                throw e;
+            }
         }
 
         LOGGER.info("Try to merge svn remote back to master");
@@ -253,6 +270,23 @@ public class CommitChecker {
         }
 
         return syncDone;
+    }
+
+    private int getErrorNumber(String svnCommitResult) {
+        final String[] strings = StringUtils.tokenizeToStringArray(svnCommitResult, "\n");
+        return getErrorNumber(strings);
+    }
+
+    private int getErrorNumber(String[] strings){
+        int errorNo = 0;
+        for (String line : strings) {
+            final int indexOf = line.indexOf(ERROR_CODE_PREFIX);
+            if (indexOf > -1) {
+                final String substring = line.substring(indexOf + ERROR_CODE_PREFIX.length());
+                errorNo = Integer.parseInt(substring);
+            }
+        }
+        return errorNo;
     }
 
     private boolean doMergeNoFF(Git git, Ref refToMerge, String mergeMessage) throws IOException {
@@ -312,18 +346,8 @@ public class CommitChecker {
                         final String msg = key + " - " + Arrays.deepToString(conflicts.get(key));
                         conflictingFiles.add(msg);
                     }
+                    cleanupRepository(git);
 
-                    // clean all before we try to start it again
-                    try {
-                        git.rebase().setOperation(RebaseCommand.Operation.ABORT).call();
-                    } catch (NoHeadException e) {
-                    } catch (WrongRepositoryStateException e) {
-                    } catch (CheckoutConflictException e) {
-                    } catch (RefNotFoundException e) {
-                    } catch (GitAPIException e) {
-                    }
-
-                    git.reset().setMode(ResetCommand.ResetType.HARD).setRef("HEAD").call();
 
                     LOGGER.info("try to solve the conflict...");
                     doMerge(git, refToMerge, mergeMessage, no_ff, true);
@@ -339,6 +363,22 @@ public class CommitChecker {
         } catch (GitAPIException e) {
             throw new RuntimeException("There is a problem with the merge.");
         }
+    }
+
+    /**
+     * Try to abort a rebase and set the branch to HEAD hard.
+     *
+     * @param git
+     * @throws GitAPIException
+     */
+    private void cleanupRepository(Git git) throws GitAPIException {
+        try {
+            git.rebase().setOperation(RebaseCommand.Operation.ABORT).call();
+        } catch (GitAPIException e) {
+            // ignore in that case...
+        }
+
+        git.reset().setMode(ResetCommand.ResetType.HARD).setRef("HEAD").call();
     }
 
     private HashSet<String> getCommitterEmails(Iterable<RevCommit> commitDiff) {
@@ -380,7 +420,14 @@ public class CommitChecker {
     }
 
     private void tryToPullIntoMergeSourceBranch(Git git, String branchName) throws GitAPIException {
-        git.checkout().setName(branchName).call();
-        git.pull().setRemote("origin").setRebase(true).call();
+        try {
+            git.checkout().setName(branchName).call();
+            git.pull().setRemote("origin").setRebase(true).call();
+        } catch (GitAPIException e) {
+            LOGGER.warning("There is a cleanup needed!");
+            cleanupRepository(git);
+            git.checkout().setName(branchName).call();
+            git.pull().setRemote("origin").setRebase(true).call();
+        }
     }
 }
