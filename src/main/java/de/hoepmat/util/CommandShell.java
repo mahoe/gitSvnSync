@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.logging.Logger;
 
 /**
+ * This class is used to run git commands that are not available with the API.
+ *
  * Created by hoepmat on 1/21/16.
  */
 @Component
@@ -32,7 +34,7 @@ public class CommandShell {
     private String syncRepositoryPath;
 
     public ArrayList<String> runCommand(String command) {
-        ArrayList<String> result = new ArrayList<String>();
+        ArrayList<String> result = new ArrayList<>();
         final Runtime runtime = Runtime.getRuntime();
         try {
             final String commandLine = pathToGitExecutable + " " + command;
@@ -40,7 +42,7 @@ public class CommandShell {
                     new File(syncRepositoryPath.substring(0, syncRepositoryPath.lastIndexOf('.')));
 
             final Process process = runtime.exec(commandLine, null, workDir);
-            process.waitFor();
+
             StringBuilder sb = new StringBuilder("Result of command '");
             sb.append(commandLine)
                     .append("' in workdir [")
@@ -64,6 +66,8 @@ public class CommandShell {
             }
 
             getOutputLines(result, process.getInputStream());
+
+            process.waitFor();
         } catch (InterruptedException | IOException e) {
             mailService.sendErrorMessage(e.getMessage());
             throw new RuntimeException(e.toString());
