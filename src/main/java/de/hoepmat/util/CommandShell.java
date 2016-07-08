@@ -13,7 +13,7 @@ import java.util.logging.Logger;
 
 /**
  * This class is used to run git commands that are not available with the API.
- *
+ * <p>
  * Created by hoepmat on 1/21/16.
  */
 @Component
@@ -38,13 +38,13 @@ public class CommandShell {
         LOGGER.info("runCommand('" + command + "')");
         ArrayList<String> error_result = new ArrayList<>();
         ArrayList<String> result = new ArrayList<>();
-        final Runtime runtime = Runtime.getRuntime();
-        try {
-            final String commandLine = pathToGitExecutable + " " + command;
-            final File workDir =
-                    new File(syncRepositoryPath.substring(0, syncRepositoryPath.lastIndexOf('.')));
+        final String commandLine = pathToGitExecutable + " " + command;
 
-            final Process process = runtime.exec(commandLine, null, workDir);
+        try {
+            ProcessBuilder processBuilder = new ProcessBuilder(commandLine);
+            processBuilder.directory(
+                    new File(syncRepositoryPath.substring(0, syncRepositoryPath.lastIndexOf('.'))));
+            final Process process = processBuilder.start();
 
             LOGGER.info("getOutputLines() in error stream");
             getOutputLines(error_result, process.getErrorStream());
@@ -52,35 +52,32 @@ public class CommandShell {
             getOutputLines(result, process.getInputStream());
 
             LOGGER.info("waitFor()");
-            boolean finished = waitForWithTimeout(process,1, TimeUnit.MINUTES);
-            if(!finished){
+            boolean finished = waitForWithTimeout(process, 1, TimeUnit.MINUTES);
+            if (!finished) {
                 StringBuilder sb = new StringBuilder();
                 sb.append("Error on running shell command\n");
                 sb.append(StringUtils.collectionToDelimitedString(error_result, "\n"));
                 sb.append(StringUtils.collectionToDelimitedString(result, "\n"));
-                throw new RuntimeException( sb.toString());
+                throw new RuntimeException(sb.toString());
             }
 
             final int exitValue = process.exitValue();
 
             StringBuilder sb = new StringBuilder("Result of command '");
-            sb.append(commandLine)
-                    .append("' in workdir [")
-                    .append(workDir.getAbsolutePath())
-                    .append("] was [")
-                    .append(exitValue)
-                    .append("]");
+            sb.append(commandLine).append("' in workdir [")
+                    .append(processBuilder.directory().getAbsolutePath()).append("] was [")
+                    .append(exitValue).append("]");
             LOGGER.info(sb.toString());
 
             if (error_result.size() != 0) {
                 if (exitValue == 0) {
                     LOGGER.warning(error_result.toString());
-                    result.addAll(0,error_result);
+                    result.addAll(0, error_result);
                 } else {
                     sb = new StringBuilder();
                     sb.append("Error on running shell command\n");
                     sb.append(StringUtils.collectionToDelimitedString(error_result, "\n"));
-                    throw new RuntimeException( sb.toString());
+                    throw new RuntimeException(sb.toString());
                 }
             }
 
@@ -101,8 +98,7 @@ public class CommandShell {
             try {
                 process.exitValue();
                 return true;
-            }
-            catch (IllegalThreadStateException ex) {
+            } catch (IllegalThreadStateException ex) {
                 if (rem > 0)
                     Thread.sleep(Math.min(TimeUnit.NANOSECONDS.toMillis(rem) + 1, 100));
             }
